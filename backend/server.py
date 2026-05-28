@@ -22,7 +22,7 @@ def home():
     return jsonify(
         {
             "status": "running",
-            "service": "SyncMaster meeting automation",
+            "service": "Auralix meeting automation",
             "endpoints": ["/health", "/transcribe", "/create-notion-db", "/check-commits", "/send-standup"],
         }
     )

@@ -487,7 +487,7 @@ def format_progress_report(commits: list[dict[str, Any]], updated: list[dict[str
     total_not_done = sum(1 for tasks in task_groups.values() for task in tasks if task["status"] != TASK_STATUS_DONE)
 
     lines = [
-        "*SyncMaster Team Progress Report*",
+        "*Auralix Team Progress Report*",
         f"*Summary:* {total_done} done, {total_not_done} not done. {len(updated)} task status update(s) from recent commits.",
         "",
     ]

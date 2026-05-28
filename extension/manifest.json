@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "SyncMaster - Workflow Automation System",
+  "name": "Auralix - Workflow Automation System",
   "version": "1.0",
   "description": "Transform your meetings with AI-powered transcription, summarization, and automation. Record, analyze, and share meeting insights effortlessly.",
   "permissions": [

@@ -2,83 +2,63 @@
 
 **Where Meetings Turn into Momentum**
 
-📹 **[Watch Demo Video](https://youtu.be/b38ItkhMtxQ)**
+[Watch Demo Video](https://youtu.be/b38ItkhMtxQ)
 
-Auralix.ai is an AI-powered meeting assistant that records or uploads team meeting audio, transcribes it with Whisper, summarizes it with Gemini, creates team tasks in Notion, tracks GitHub commits, and sends clean Slack progress reports.
+Auralix.ai is an AI-powered meeting assistant that records or uploads meeting audio, transcribes it with Whisper, extracts tasks with Gemini, creates a Notion task database, tracks GitHub commits, and sends Slack progress reports.
 
-The current version uses one backend folder: `backend`.
+## Features
 
----
+- Record or upload meeting audio from the web app or Chrome extension.
+- Transcribe audio with Faster Whisper.
+- Extract only task name and assignee with Gemini.
+- Create a fresh Notion database from the latest `meeting_summary.json`.
+- Match GitHub commits to assigned tasks and mark only the matching task as `Done`.
+- Send one Slack progress report using current Notion task statuses.
 
-## 🚀 Features
-
-- **🎙️ Meeting Audio Capture**: Record from the web app or Chrome extension, or upload an audio file.
-- **🤖 AI Processing**: Faster Whisper transcription plus Gemini meeting summary and task extraction.
-- **📋 Notion Task Creation**: Click `Create Notion DB` after a summary is generated to create a fresh task database under one parent page.
-- **🐙 GitHub Tracking**: Checks commits and marks the matching assigned task as `Done`.
-- **📤 Slack Progress Report**: Sends one formatted report with assignee, done tasks, not-done tasks, and progress summary.
-- **🧭 Simple Controls**: `Check GitHub Commits` updates Notion, and `Send Progress Report` posts to Slack.
-
----
-
-## 🏗️ Architecture
+## Workflow
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              INPUT SOURCES                                  │
-│        Web App  |  Chrome Extension  |  Microphone  |  Audio Upload         │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         AI PROCESSING ENGINE                                │
-│        Faster Whisper transcription  →  Gemini summary and task JSON        │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         TASK MANAGEMENT                                     │
-│        New Notion database under PARENT_PAGE_ID  →  task rows created       │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         GITHUB MONITORING                                   │
-│        Commit author + message matching  →  matching task becomes Done      │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         SLACK REPORTING                                     │
-│        Done tasks + Not Done tasks + progress summary                       │
-└─────────────────────────────────────────────────────────────────────────────┘
+Audio Upload / Recording
+        |
+        v
+Whisper transcript
+        |
+        v
+Gemini task JSON: task + assignee
+        |
+        v
+meeting_summary.json
+        |
+        v
+Create Notion DB button
+        |
+        v
+GitHub commit tracking -> matching task marked Done
+        |
+        v
+Slack progress report
 ```
 
----
+## Project Structure
 
-## 🛠️ Quick Start
-
-### 1. Setup
-
-```bash
-git clone <repo-url>
-cd meeting
-pip install -r requirements.txt
+```text
+meeting/
+├── backend/
+│   ├── app.py                # Whisper + Gemini task extraction
+│   ├── server.py             # Flask API
+│   ├── sync_pipeline.py      # Notion, GitHub, Slack workflow
+│   ├── meeting_summary.json  # Latest generated task summary
+│   └── user_mapping.json     # Local-only mapping fallback, ignored by git
+├── extension/                # Chrome extension
+├── web_app/                  # Static web app
+├── workflow_docs/            # Extra workflow explanation docs
+├── requirements.txt
+└── render.yaml
 ```
 
-If you are using the included virtual environment on Windows:
+## Environment Variables
 
-```powershell
-.\venv\Scripts\python.exe -m pip install -r requirements.txt
-```
-
-### 2. Create A Notion Parent Page
-
-Create one Notion page and connect it to your Notion integration. Auralix will create a new task database inside that parent page when you click `Create Notion DB`.
-
-### 3. Configure
-
-Create a `.env` file in the project root:
+Create `.env` locally, and add the same values in Render for deployment:
 
 ```env
 GEMINI_API_KEY=your_gemini_api_key
@@ -90,118 +70,57 @@ TOKEN_GITHUB=your_github_personal_access_token
 REPO_OWNER=your_github_username_or_org
 REPO_NAME=your_repository_name
 SLACK_WEBHOOK_URL=your_slack_webhook_url
+WHISPER_MODEL=tiny.en
 ```
 
-`DATABASE_ID` is updated automatically whenever `Create Notion DB` creates a new Notion database. If you want to continue tracking an older meeting, paste the old database ID into `.env`, restart the backend, then use the GitHub or Slack buttons.
+`USER_MAPPING_JSON` is private team mapping data. Locally, you can use `backend/user_mapping.json` instead, but that file is ignored by git.
 
-### 4. Run The Backend
+## Run Locally
 
-```bash
-python backend/server.py
-```
-
-With the included Windows virtual environment:
+Install dependencies:
 
 ```powershell
-.\venv\Scripts\python.exe backend\server.py
+pip install -r requirements.txt
 ```
 
-The backend runs at:
+Start backend:
 
-```text
-http://127.0.0.1:5000
+```powershell
+python backend\server.py
 ```
 
-Whisper prints the meeting transcript in this backend terminal.
-
-### 5. Use The Web App
-
-Open another terminal:
+Start web app in another terminal:
 
 ```powershell
 cd web_app
-..\venv\Scripts\python.exe -m http.server 8000
+python -m http.server 8001
 ```
 
-Then open:
+Open:
 
 ```text
-http://127.0.0.1:8000/index.html
+http://127.0.0.1:8001/index.html
 ```
 
-### 6. Install The Chrome Extension
+Use order:
 
-1. Open `chrome://extensions/`.
-2. Enable Developer Mode.
-3. Click `Load unpacked`.
-4. Select the `extension` folder.
-5. Keep the backend running on `http://127.0.0.1:5000`.
-6. Allow microphone permissions when recording.
+1. Upload or record audio.
+2. Click `Create Notion DB`.
+3. Click `Check GitHub Commits`.
+4. Click `Send Progress Report`.
 
----
-
-## 🔄 Workflow
-
-1. **Record or Upload** → Use the web app or extension to send meeting audio.
-2. **Transcribe** → Whisper converts audio to text and prints the transcript in the terminal.
-3. **Summarize** → Gemini creates a readable summary and structured task JSON.
-4. **Create Tasks** → Click `Create Notion DB` to create a new database from `meeting_summary.json`.
-5. **Track Commits** → `Check GitHub Commits` marks the matching task for the mapped commit author as `Done`.
-6. **Report** → `Send Progress Report` sends the current task status to Slack.
-
----
-
-## 📁 Structure
-
-```text
-meeting/
-├── backend/
-│   └── whisper_api/
-│       ├── app.py                # Whisper + Gemini processing
-│       ├── server.py             # Flask API
-│       ├── sync_pipeline.py      # Notion, GitHub, Slack workflow
-│       ├── user_mapping.json     # Local-only team member mapping fallback
-│       └── meeting_summary.json  # Latest generated summary
-├── extension/                    # Chrome extension
-├── web_app/                      # Web interface
-├── requirements.txt              # Python dependencies
-└── README.md
-```
-
----
-
-## 🔗 Integrations
-
-- **📝 Notion**: Fresh task database when `Create Notion DB` is clicked.
-- **💬 Slack**: One clean progress report button.
-- **🐙 GitHub**: Commit monitoring and task status updates.
-- **🤖 AI**: Faster Whisper transcription and Gemini analysis.
-
----
-
-## 🐛 Notes
-
-- `meeting_summary.json` is the source for task creation.
-- `USER_MAPPING_JSON` connects GitHub usernames to Notion assignees and Slack display names in deployment.
-- `backend/user_mapping.json` can still be used locally, but it is ignored by git.
-- `.sync_state.json` only remembers the last GitHub commit checked.
-- To reuse an old Notion database, manually update `DATABASE_ID` in `.env` and restart the backend.
-- For a workflow-first code explanation, read `workflow_docs/README.md`. That is a docs index, not a second project README.
-
----
-
-## 🚢 Deployment
+## Deploy
 
 Deploy the backend and frontend separately.
 
 ### Backend On Render
 
-1. Push this project to GitHub.
-2. Open Render and create a new `Web Service`.
-3. Connect your GitHub repo.
-4. Use these settings:
+Choose `Web Service`.
 
 ```text
+Root Directory:
+leave empty
+
 Build Command:
 pip install -r requirements.txt
 
@@ -209,66 +128,55 @@ Start Command:
 gunicorn --chdir backend server:app
 ```
 
-This repo also includes `render.yaml`, so Render can detect the same backend settings from the repo.
+Add all environment variables from the section above in Render.
 
-Add these environment variables in Render:
+Render Free has 512 MB RAM, so use:
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key
-NOTION_TOKEN=your_notion_integration_token
-PARENT_PAGE_ID=your_notion_parent_page_id
-DATABASE_ID=optional_existing_database_id
-USER_MAPPING_JSON={"saheli":{"github_username":"your_github","notion_name":"Saheli","slack_display_name":"Saheli"}}
-TOKEN_GITHUB=your_github_personal_access_token
-REPO_OWNER=your_github_username_or_org
-REPO_NAME=your_repository_name
-SLACK_WEBHOOK_URL=your_slack_webhook_url
+WHISPER_MODEL=tiny.en
 ```
 
-After deployment, Render gives you a backend URL like:
-
-```text
-https://syncmaster-backend.onrender.com
-```
+If Whisper still causes memory issues, use a larger Render instance or move transcription to an external API.
 
 ### Web App On Vercel Or Netlify
 
-Before deploying the web app, open `web_app/config.js` and replace localhost with your deployed backend URL:
-
-```js
-window.SYNCMASTER_API_URL = "https://your-backend-url.onrender.com";
-```
-
-Deploy `web_app` as a static site:
+Set the static site directory to:
 
 ```text
-Root / publish directory:
 web_app
-
-Build command:
-leave empty
 ```
 
-### Chrome Extension After Backend Deploy
+Before deploying, update `web_app/config.js`:
+
+```js
+window.AURALIX_API_URL = "https://your-render-backend-url.onrender.com";
+```
+
+### Chrome Extension
 
 Update `extension/popup.js`:
 
 ```js
-const API_URL = "https://your-backend-url.onrender.com";
+const API_URL = "https://your-render-backend-url.onrender.com";
 ```
 
 Update `extension/manifest.json`:
 
 ```json
-"host_permissions": ["https://your-backend-url.onrender.com/*"]
+"host_permissions": ["https://your-render-backend-url.onrender.com/*"]
 ```
 
-Then reload the unpacked extension from `chrome://extensions/`.
+Reload the unpacked extension from `chrome://extensions/`.
 
-### Deployment Note
+## Notes
 
-When `Create Notion DB` runs, the backend updates `DATABASE_ID` at runtime. On free hosts, that value can reset after redeploy or sleep. If that happens, copy the created Notion database ID into the host dashboard environment variable `DATABASE_ID`.
+- `meeting_summary.json` is the source for Notion task creation.
+- `DATABASE_ID` is updated when a new Notion database is created.
+- On hosted platforms, runtime file changes can reset after redeploy. If needed, copy the latest Notion database ID into the hosted `DATABASE_ID` environment variable.
+- Extra workflow explanations are in `workflow_docs/end_to_end_workflow.md` and `workflow_docs/file_responsibility_map.md`.
 
----
+## Acknowledgement
 
-**Built for efficient team collaboration.**
+This is not a team project. I independently rebuilt the application with cleaner code. The original idea, frontend code, and demo video were from our previous Hack4Bengal 4.0 team project, [sahelikundu22/Auralix.ai_H4B4.0](https://github.com/sahelikundu22/Auralix.ai_H4B4.0), which was awarded 2nd runner up at Hack4Bengal 4.0.
+
+I also took help from Codex for understanding and improving certain parts.

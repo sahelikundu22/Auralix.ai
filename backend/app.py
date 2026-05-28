@@ -18,7 +18,15 @@ LATEST_TRANSCRIPT_PATH = BASE_DIR / "latest_transcript.txt"
 load_dotenv(dotenv_path=ROOT_DIR / ".env", override=True)
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-model = WhisperModel("small.en", device="cpu", compute_type="int8")
+whisper_model = None
+
+
+def get_whisper_model() -> WhisperModel:
+    global whisper_model
+    if whisper_model is None:
+        model_name = os.getenv("WHISPER_MODEL", "tiny.en")
+        whisper_model = WhisperModel(model_name, device="cpu", compute_type="int8")
+    return whisper_model
 
 
 def print_transcript(text: str, label: str = "TRANSCRIPT") -> None:
@@ -28,6 +36,7 @@ def print_transcript(text: str, label: str = "TRANSCRIPT") -> None:
 
 
 def transcribe(audio_path: Path) -> str:
+    model = get_whisper_model()
     segments, _ = model.transcribe(str(audio_path), language="en", beam_size=5)
     text = " ".join(segment.text for segment in segments).strip()
     if not text:
