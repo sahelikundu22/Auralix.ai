@@ -17,6 +17,7 @@ app = Flask(__name__)
 CORS(app)
 
 
+# Clean task data before sending it to Notion.
 def validate_tasks(tasks: list[dict]) -> list[dict]:
     if not tasks:
         raise RuntimeError("No extracted tasks found. Upload or record audio before creating the Notion DB.")
@@ -36,7 +37,7 @@ def validate_tasks(tasks: list[dict]) -> list[dict]:
     return cleaned
 
 
-
+# Show basic backend status and available routes.
 @app.get("/")
 def home():
     return jsonify(
@@ -48,11 +49,13 @@ def home():
     )
 
 
+# Health check used by the frontend.
 @app.get("/health")
 def health():
     return jsonify({"status": "healthy"})
 
 
+# Receive audio and return extracted tasks.
 @app.post("/transcribe")
 def transcribe_audio():
     if "file" not in request.files:
@@ -77,6 +80,7 @@ def transcribe_audio():
             temp_path.unlink()
 
 
+# Create a fresh Notion database from extracted tasks.
 @app.post("/create-notion-db")
 def create_notion_db():
     try:
@@ -89,6 +93,7 @@ def create_notion_db():
         return jsonify({"status": "error", "message": str(exc)}), 500
 
 
+# Check recent GitHub commits and update Notion.
 @app.get("/check-commits")
 def check_commits():
     try:
@@ -97,6 +102,7 @@ def check_commits():
         return jsonify({"status": "error", "message": str(exc)}), 500
 
 
+# Send the current Notion progress report to Slack.
 @app.get("/send-standup")
 def send_standup():
     try:

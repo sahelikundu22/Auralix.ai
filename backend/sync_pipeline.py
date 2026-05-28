@@ -54,6 +54,7 @@ STOP_WORDS = {
 }
 
 
+# Read an environment variable with quote cleanup.
 def env(name: str, default: str | None = None) -> str | None:
     """Read an environment variable and normalize quotes/spaces."""
     value = os.getenv(name)
@@ -62,6 +63,7 @@ def env(name: str, default: str | None = None) -> str | None:
     return value.strip().strip('"').strip("'")
 
 
+# Read an environment variable that must exist.
 def required_env(name: str) -> str:
     """Read a required environment variable."""
     value = env(name)
@@ -70,6 +72,7 @@ def required_env(name: str) -> str:
     return value
 
 
+# Build headers for Notion API requests.
 def notion_headers() -> dict[str, str]:
     """Headers for Notion API."""
     return {
@@ -79,6 +82,7 @@ def notion_headers() -> dict[str, str]:
     }
 
 
+# Raise a readable error for failed API calls.
 def raise_api_error(response: requests.Response, service: str, action: str) -> None:
     if response.ok:
         return
@@ -89,6 +93,7 @@ def raise_api_error(response: requests.Response, service: str, action: str) -> N
     raise RuntimeError(f"{service} {action} failed ({response.status_code}): {detail}")
 
 
+# Build headers for GitHub API requests.
 def github_headers() -> dict[str, str]:
     """Headers for GitHub API."""
     token = env("TOKEN_GITHUB")
@@ -98,6 +103,7 @@ def github_headers() -> dict[str, str]:
     return headers
 
 
+# Read JSON from disk when a local file is used.
 def load_json(path: Path, default: Any) -> Any:
     """Load JSON, returning default when missing."""
     if not path.exists():
@@ -106,6 +112,7 @@ def load_json(path: Path, default: Any) -> Any:
         return json.load(f)
 
 
+# Save the latest Notion database id into .env.
 def write_database_id(database_id: str) -> None:
     """Replace DATABASE_ID in .env with the latest Notion database ID."""
     lines = ENV_PATH.read_text(encoding="utf-8").splitlines() if ENV_PATH.exists() else []
@@ -127,6 +134,7 @@ def write_database_id(database_id: str) -> None:
     print(f"DATABASE_ID updated in .env: {database_id}", flush=True)
 
 
+# Load private member mapping from env or local file.
 def load_user_mapping() -> dict[str, dict[str, str]]:
     """Load GitHub/Notion/Slack member mapping from env or local file."""
     mapping_json = env("USER_MAPPING_JSON")
@@ -138,6 +146,7 @@ def load_user_mapping() -> dict[str, dict[str, str]]:
     return load_json(USER_MAPPING_PATH, {})
 
 
+# Normalize assignee names using the user mapping.
 def normalize_name(name: str | None) -> str:
     """Normalize Gemini assignee text to a known Notion assignee name."""
     if not name:
@@ -159,6 +168,7 @@ def normalize_name(name: str | None) -> str:
     return known_names.get(needle, name.strip())
 
 
+# Find a mapped member by GitHub username.
 def user_for_github(username: str | None) -> dict[str, str] | None:
     """Find mapped user by GitHub username."""
     if not username:
@@ -169,6 +179,7 @@ def user_for_github(username: str | None) -> dict[str, str] | None:
     return None
 
 
+# Find a mapped member by Notion assignee name.
 def user_for_notion(name: str | None) -> dict[str, str] | None:
     """Find mapped user by Notion assignee name."""
     if not name:
@@ -179,6 +190,7 @@ def user_for_notion(name: str | None) -> dict[str, str] | None:
     return None
 
 
+# Convert extracted task objects into Notion rows.
 def prepare_tasks(action_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Convert frontend/Gemini task items to Notion task rows."""
     tasks = []
@@ -196,6 +208,7 @@ def prepare_tasks(action_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return tasks
 
 
+# Create a new Notion task database.
 def create_notion_database(title: str | None = None) -> str:
     """Create a fresh task database under PARENT_PAGE_ID and write DATABASE_ID."""
     database_title = title or f"Meeting Tasks {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}"
@@ -222,12 +235,14 @@ def create_notion_database(title: str | None = None) -> str:
     return database_id
 
 
+# Read the active Notion database id.
 def database_id() -> str:
     """Read the active Notion database ID from .env."""
     load_dotenv(ENV_PATH, override=True)
     return required_env("DATABASE_ID")
 
 
+# Read a Notion text property as plain text.
 def property_text(properties: dict[str, Any], name: str) -> str:
     """Read a Notion title/rich_text property as plain text."""
     prop = properties.get(name, {})
@@ -237,12 +252,14 @@ def property_text(properties: dict[str, Any], name: str) -> str:
     return values[0].get("plain_text") or values[0].get("text", {}).get("content", "")
 
 
+# Read the Notion task status value.
 def property_status(properties: dict[str, Any]) -> str:
     """Read Notion Status select."""
     status = properties.get("Status", {}).get("select")
     return status.get("name", "") if status else ""
 
 
+# Fetch all tasks from the active Notion database.
 def query_notion_tasks() -> list[dict[str, Any]]:
     """Fetch tasks from the active DATABASE_ID."""
     db_id = database_id()
@@ -255,6 +272,7 @@ def query_notion_tasks() -> list[dict[str, Any]]:
     return response.json().get("results", [])
 
 
+# Add one task row to a Notion database.
 def add_task_to_notion(database_id: str, task: dict[str, Any]) -> str:
     """Create one row/page in the active Notion database."""
     properties: dict[str, Any] = {
@@ -272,6 +290,7 @@ def add_task_to_notion(database_id: str, task: dict[str, Any]) -> str:
     return response.json()["id"]
 
 
+# Create a Notion database and insert meeting tasks.
 def import_meeting_tasks(
     *,
     fresh_database: bool = True,
@@ -288,6 +307,7 @@ def import_meeting_tasks(
     return {"created": len(tasks), "total": len(tasks), "database_id": target_database_id}
 
 
+# Fetch GitHub commits from the recent time window.
 def fetch_recent_commits(hours: int = 24, limit: int = 100) -> list[dict[str, Any]]:
     """Fetch commits from the last N hours from the configured GitHub repo."""
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
@@ -301,6 +321,7 @@ def fetch_recent_commits(hours: int = 24, limit: int = 100) -> list[dict[str, An
     return response.json()
 
 
+# Print fetched commits in the terminal.
 def print_commit_log(label: str, commits: list[dict[str, Any]]) -> None:
     """Print fetched/tracked commits in terminal."""
     print(f"\n========== {label} ({len(commits)}) ==========", flush=True)
@@ -315,6 +336,7 @@ def print_commit_log(label: str, commits: list[dict[str, Any]]) -> None:
     print("========================================\n", flush=True)
 
 
+# Mark one Notion task as Done.
 def mark_task_done(page_id: str) -> None:
     """Set one Notion database row/page to Done."""
     response = requests.patch(
@@ -326,11 +348,13 @@ def mark_task_done(page_id: str) -> None:
     raise_api_error(response, "Notion", "task status update")
 
 
+# Extract meaningful matching words from text.
 def keywords(text: str) -> set[str]:
     words = re.findall(r"[a-zA-Z0-9]+", text.lower())
     return {word for word in words if len(word) > 2 and word not in STOP_WORDS}
 
 
+# Score how well a commit message matches a task.
 def task_match_score(commit_message: str, task_name: str) -> int:
     commit_words = keywords(commit_message)
     task_words = keywords(task_name)
@@ -344,6 +368,7 @@ def task_match_score(commit_message: str, task_name: str) -> int:
     return len(overlap) if len(overlap) >= 2 else 0
 
 
+# Find the best open task for one assignee and commit.
 def best_task_match(commit_message: str, pages: list[dict[str, Any]], assignee: str) -> dict[str, Any] | None:
     best_page = None
     best_score = 0
@@ -364,6 +389,7 @@ def best_task_match(commit_message: str, pages: list[dict[str, Any]], assignee: 
     return best_page if best_score >= 1 else None
 
 
+# Update matching Notion tasks from GitHub commits.
 def update_tasks_from_commits(commits: list[dict[str, Any]]) -> list[dict[str, str]]:
     """For each tracked commit, mark the matching assigned task Done."""
     updated = []
@@ -400,6 +426,7 @@ def update_tasks_from_commits(commits: list[dict[str, Any]]) -> list[dict[str, s
     return updated
 
 
+# Group Notion tasks by Slack display name.
 def tasks_by_user() -> dict[str, list[dict[str, str]]]:
     """Group active database tasks by Slack display name."""
     grouped: dict[str, list[dict[str, str]]] = {}
@@ -418,6 +445,7 @@ def tasks_by_user() -> dict[str, list[dict[str, str]]]:
     return grouped
 
 
+# Group commit messages by Slack display name.
 def commits_by_user(commits: list[dict[str, Any]]) -> dict[str, list[str]]:
     """Group commit messages by Slack display name."""
     grouped: dict[str, list[str]] = {}
@@ -429,6 +457,7 @@ def commits_by_user(commits: list[dict[str, Any]]) -> dict[str, list[str]]:
     return grouped
 
 
+# Build the Slack progress report text.
 def format_progress_report(commits: list[dict[str, Any]], updated: list[dict[str, str]]) -> str:
     """Build Slack progress report."""
     task_groups = tasks_by_user()
@@ -467,6 +496,7 @@ def format_progress_report(commits: list[dict[str, Any]], updated: list[dict[str
     return "\n".join(lines).strip()
 
 
+# Send a message to the Slack webhook.
 def send_to_slack(message: str) -> None:
     """Send report to Slack webhook."""
     webhook = env("SLACK_WEBHOOK_URL")
@@ -476,6 +506,7 @@ def send_to_slack(message: str) -> None:
     response.raise_for_status()
 
 
+# Run GitHub sync, Notion updates, and optional Slack reporting.
 def sync_once(send_slack: bool = True, force_slack: bool = False) -> dict[str, Any]:
     """Run one sync pass."""
     import_result = {"created": 0, "total": 0}

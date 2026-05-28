@@ -15,6 +15,7 @@ const createNotionDbBtn = document.getElementById("createNotionDb");
 const checkCommitsBtn = document.getElementById("checkCommits");
 const sendStandupBtn = document.getElementById("sendStandup");
 
+// Show the current workflow status in the popup.
 function showStatus(message, type = "") {
   const text = statusDisplay.querySelector(".status-text");
   if (text) {
@@ -25,6 +26,7 @@ function showStatus(message, type = "") {
   statusDisplay.className = `status${type ? ` ${type}` : ""}`;
 }
 
+// Show a short popup message.
 function showToast(message, type = "") {
   toast.textContent = message;
   toast.className = `toast show${type ? ` ${type}` : ""}`;
@@ -33,6 +35,7 @@ function showToast(message, type = "") {
   }, 3000);
 }
 
+// Update the record button while recording starts or stops.
 function setRecordingUI(recording) {
   isRecording = recording;
   recordBtn.classList.toggle("recording", recording);
@@ -40,6 +43,7 @@ function setRecordingUI(recording) {
   showStatus(recording ? "Recording..." : "Ready to record", recording ? "processing" : "");
 }
 
+// Parse backend JSON and throw useful errors.
 async function readJson(response) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -48,6 +52,7 @@ async function readJson(response) {
   return data;
 }
 
+// Call a simple backend route and show status.
 async function callBackend(endpoint, action) {
   try {
     showStatus(`${action}...`, "processing");
@@ -62,6 +67,7 @@ async function callBackend(endpoint, action) {
   }
 }
 
+// Send extracted tasks to create a Notion database.
 async function createNotionDb() {
   try {
     if (!latestTasks.length) {
@@ -88,6 +94,7 @@ async function createNotionDb() {
   }
 }
 
+// Upload audio to backend and store extracted tasks.
 async function uploadAudio(audioBlob, filename = "meeting_audio.webm") {
   latestTasks = [];
   showStatus("Processing audio and extracting tasks...", "processing");
@@ -115,6 +122,7 @@ async function uploadAudio(audioBlob, filename = "meeting_audio.webm") {
   }
 }
 
+// Start microphone recording from the extension popup.
 async function startRecording() {
   try {
     activeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -141,6 +149,7 @@ async function startRecording() {
   }
 }
 
+// Stop recording and trigger audio upload.
 function stopRecording() {
   if (mediaRecorder && isRecording) {
     mediaRecorder.stop();

@@ -20,6 +20,7 @@ genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 whisper_model = None
 
 
+# Load the Whisper model once and reuse it.
 def get_whisper_model() -> WhisperModel:
     global whisper_model
     if whisper_model is None:
@@ -28,12 +29,14 @@ def get_whisper_model() -> WhisperModel:
     return whisper_model
 
 
+# Print transcript text in a readable terminal block.
 def print_transcript(text: str, label: str = "TRANSCRIPT") -> None:
     print(f"\n========== {label} START ==========", flush=True)
     print(text, flush=True)
     print(f"=========== {label} END ===========\n", flush=True)
 
 
+# Turn an uploaded audio file into transcript text.
 def transcribe(audio_path: Path) -> str:
     model = get_whisper_model()
     segments, _ = model.transcribe(str(audio_path), language="en", beam_size=5)
@@ -57,11 +60,13 @@ def transcribe(audio_path: Path) -> str:
 #     return text
 
 
+# Remove markdown fences from Gemini JSON output.
 def clean_json_text(text: str) -> str:
     text = re.sub(r"```(?:json)?", "", text, flags=re.IGNORECASE)
     return text.replace("```", "").strip()
 
 
+# Ask Gemini for task and assignee data.
 def generate_summary(transcript: str) -> dict:
     try:
         gemini_model = genai.GenerativeModel("gemini-2.5-flash")
@@ -103,6 +108,7 @@ Rules:
         }
 
 
+# Run transcription and task extraction together.
 def process(audio_path: Path) -> dict:
     transcript = transcribe(audio_path)
     result = generate_summary(transcript)
