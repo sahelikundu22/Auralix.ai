@@ -1,12 +1,6 @@
 # End-to-End Workflow
 
-This project has three main user actions:
-
-1. Record or upload meeting audio.
-2. Check GitHub commits.
-3. Send a Slack progress report.
-
-Each action starts in the web app or extension, then calls the Flask backend.
+This project is driven by the frontend controls. The app does not store a meeting summary JSON file.
 
 ## Visual Overview
 
@@ -14,193 +8,67 @@ Each action starts in the web app or extension, then calls the Flask backend.
 flowchart TD
   UI["Web App or Chrome Extension"]
   Upload["Record or Upload Audio"]
-  ServerTranscribe["server.py: POST /transcribe"]
-  AppProcess["app.py: process(audio_path)"]
-  Whisper["Faster Whisper: audio -> transcript"]
-  Gemini["Gemini: transcript -> summary + action_items JSON"]
-  SummaryFile["meeting_summary.json"]
-  CreateDbBtn["Create Notion DB"]
-  CreateDbRoute["server.py: POST /create-notion-db"]
-  CreateDb["sync_pipeline.py: create new Notion database"]
-  EnvDb[".env DATABASE_ID updated"]
-  NotionTasks["Notion task rows created"]
+  Transcribe["POST /transcribe"]
+  Whisper["Faster Whisper: audio to transcript"]
+  Gemini["Gemini: task + assignee JSON"]
+  Memory["Frontend keeps extracted tasks in memory"]
+  CreateDb["POST /create-notion-db with tasks"]
+  NotionDb["Create Notion database and rows"]
+  Github["Check GitHub Commits"]
+  Match["Match commit author and message to Notion task"]
+  Slack["Send Slack progress report"]
 
-  CheckBtn["Check GitHub Commits"]
-  CheckRoute["server.py: GET /check-commits"]
-  FetchCommits["sync_pipeline.py: fetch recent commits"]
-  MapUser["USER_MAPPING_JSON or user_mapping.json maps GitHub user to assignee"]
-  UpdateNotion["Matching task for that assignee becomes Done"]
-
-  SlackBtn["Send Progress Report"]
-  SlackRoute["server.py: GET /send-standup"]
-  ReadNotion["Read active Notion DATABASE_ID"]
-  FormatReport["Build done/not-done progress report"]
-  SendSlack["Send message to Slack webhook"]
-
-  UI --> Upload --> ServerTranscribe --> AppProcess --> Whisper --> Gemini --> SummaryFile
-  UI --> CreateDbBtn --> CreateDbRoute --> CreateDb --> EnvDb --> NotionTasks
-  UI --> CheckBtn --> CheckRoute --> FetchCommits --> MapUser --> UpdateNotion
-  UI --> SlackBtn --> SlackRoute --> FetchCommits --> MapUser --> UpdateNotion --> ReadNotion --> FormatReport --> SendSlack
+  UI --> Upload --> Transcribe --> Whisper --> Gemini --> Memory --> CreateDb --> NotionDb
+  UI --> Github --> Match --> NotionDb
+  UI --> Slack
+  NotionDb --> Slack
 ```
 
-## Workflow 1: Meeting Audio To Summary JSON
-
-The user records or uploads audio from either frontend.
+## Workflow 1: Audio To Extracted Tasks
 
 ```text
 web_app/app.js or extension/popup.js
-  sends POST /transcribe with:
-  - audio file
-  - meeting title
+  -> POST /transcribe
+  -> backend/server.py
+  -> backend/app.py
+  -> Whisper transcript
+  -> Gemini extracts task and assignee objects
+  -> frontend stores those tasks in memory
 ```
 
-Then Flask receives the request:
+No Notion database is created during this step.
+
+## Workflow 2: Extracted Tasks To Notion
+
+When `Create Notion DB` is clicked:
 
 ```text
-backend/server.py
-  transcribe_audio()
-  - saves uploaded audio as a temporary file
-  - calls process(temp_audio_path)
+frontend sends the extracted task list
+  -> server.py validates the task list
+  -> sync_pipeline.py creates a new Notion database
+  -> each task becomes one Notion row
 ```
 
-The AI work happens in:
+If task names or assignees need correction later, edit them directly in Notion.
+
+## Workflow 3: GitHub Commit To Notion Status
 
 ```text
-backend/app.py
-  process(audio_path)
-  - calls transcribe(audio_path)
-  - sends transcript to Gemini
-  - writes meeting_summary.json
+Check GitHub Commits
+  -> fetch commits from the last 24 hours
+  -> use USER_MAPPING_JSON or backend/user_mapping.json to identify the assignee
+  -> compare commit message words with task text
+  -> mark only the matching task as Done
 ```
 
-After Gemini creates the summary, the UI shows the readable summary. No Notion database is created yet.
+Already-done Notion tasks are skipped, so repeated checks do not need a local SHA state file.
 
-## Workflow 2: Summary JSON To Notion Tasks
-
-The user clicks `Create Notion DB` after the summary exists.
+## Workflow 4: Slack Report
 
 ```text
-web_app/app.js or extension/popup.js
-  calls POST /create-notion-db
+Send Progress Report
+  -> read active Notion DATABASE_ID
+  -> group tasks by assignee
+  -> include Done and Not Done tasks
+  -> send one Slack message
 ```
-
-Flask receives the request:
-
-```text
-backend/server.py
-  create_notion_db()
-  - calls import_meeting_tasks(fresh_database=True)
-```
-
-The Notion task work happens in:
-
-```text
-backend/sync_pipeline.py
-  import_meeting_tasks(fresh_database=True)
-  - reads meeting_summary.json
-  - creates a new Notion database under PARENT_PAGE_ID
-  - updates DATABASE_ID in .env
-  - creates task rows inside that database
-```
-
-Why this jumps between files:
-
-```text
-server.py owns HTTP requests.
-app.py owns AI processing.
-sync_pipeline.py owns external workflow integrations.
-```
-
-Keeping those jobs separate makes the code easier to change. For example, you can edit Gemini prompts in `app.py` without touching the Notion or Slack logic.
-
-## Workflow 3: GitHub Commit To Notion Status Update
-
-The user clicks `Check GitHub Commits`.
-
-```text
-web_app/app.js or extension/popup.js
-  calls GET /check-commits
-```
-
-Flask forwards the request:
-
-```text
-backend/server.py
-  check_commits()
-  - calls sync_once(send_slack=False)
-```
-
-The sync logic handles the real work:
-
-```text
-backend/sync_pipeline.py
-  sync_once()
-  - fetches recent commits from GitHub
-  - compares commits with .sync_state.json
-  - maps commit author using USER_MAPPING_JSON or user_mapping.json
-  - reads tasks from the active Notion DATABASE_ID
-  - matches the commit message to that member's task text
-  - marks only the matching task as Done
-```
-
-Important rule:
-
-```text
-One commit marks one matching task done. If the commit message does not match a task, no task is changed.
-```
-
-## Workflow 4: Slack Progress Report
-
-The user clicks `Send Progress Report`.
-
-```text
-web_app/app.js or extension/popup.js
-  calls GET /send-standup
-```
-
-Flask routes the request:
-
-```text
-backend/server.py
-  send_standup()
-  - calls sync_once(send_slack=True, force_slack=True)
-```
-
-The sync pipeline:
-
-```text
-backend/sync_pipeline.py
-  sync_once()
-  - checks commits again
-  - updates Notion if needed
-  - reads all current tasks from Notion
-  - groups tasks by assignee
-  - creates one Slack message
-  - sends it to SLACK_WEBHOOK_URL
-```
-
-The Slack message includes:
-
-- assignee name
-- recent commit messages
-- done tasks
-- not-done tasks
-- overall progress summary
-
-## Active Data Files
-
-```text
-meeting_summary.json
-  latest Gemini summary and action_items
-
-USER_MAPPING_JSON or user_mapping.json
-  maps GitHub username -> Notion assignee -> Slack display name
-
-.sync_state.json
-  remembers the last GitHub commit checked
-
-.env
-  stores API keys, parent page id, and active Notion DATABASE_ID
-```
-
-`meeting_summary.json` is used for creating tasks. GitHub and Slack use the active Notion database from `.env`.

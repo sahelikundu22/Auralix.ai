@@ -4,10 +4,9 @@ let mediaRecorder;
 let audioChunks = [];
 let isRecording = false;
 let activeStream;
+let latestTasks = [];
 
 const statusDisplay = document.getElementById("status");
-const summarySection = document.getElementById("summarySection");
-const summaryEdit = document.getElementById("summaryEdit");
 const toast = document.getElementById("toast");
 const recordBtn = document.getElementById("recordBtn");
 const meetingTitleInput = document.getElementById("meetingTitle");
@@ -32,16 +31,6 @@ function showToast(message, type = "") {
   setTimeout(() => {
     toast.className = "toast";
   }, 3000);
-}
-
-function showSummary(summary) {
-  summarySection.classList.remove("hidden");
-  summaryEdit.value = summary || "";
-}
-
-function hideSummary() {
-  summarySection.classList.add("hidden");
-  summaryEdit.value = "";
 }
 
 function setRecordingUI(recording) {
@@ -75,11 +64,18 @@ async function callBackend(endpoint, action) {
 
 async function createNotionDb() {
   try {
+    if (!latestTasks.length) {
+      throw new Error("No tasks ready yet. Upload or record audio first.");
+    }
+
     showStatus("Creating Notion DB...", "processing");
     const data = await fetch(`${API_URL}/create-notion-db`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ meetingTitle: meetingTitleInput.value || "Untitled Meeting" }),
+      body: JSON.stringify({
+        meetingTitle: meetingTitleInput.value || "Untitled Meeting",
+        tasks: latestTasks,
+      }),
     }).then(readJson);
 
     showStatus(`Notion DB created. Tasks: ${data.tasks.created}.`, "success");
@@ -93,8 +89,8 @@ async function createNotionDb() {
 }
 
 async function uploadAudio(audioBlob, filename = "meeting_audio.webm") {
-  hideSummary();
-  showStatus("Processing audio and generating summary JSON...", "processing");
+  latestTasks = [];
+  showStatus("Processing audio and extracting tasks...", "processing");
 
   const formData = new FormData();
   formData.append("file", audioBlob, filename);
@@ -106,14 +102,13 @@ async function uploadAudio(audioBlob, filename = "meeting_audio.webm") {
       body: formData,
     }).then(readJson);
 
-    const formattedText = data.summary?.formatted_text;
-    if (!formattedText) {
-      throw new Error("Summary was not generated.");
+    latestTasks = data.summary?.tasks || [];
+    if (!latestTasks.length) {
+      throw new Error("No tasks were extracted.");
     }
 
-    showSummary(formattedText);
-    showStatus("Summary JSON ready. Click Create Notion DB next.", "success");
-    showToast("Summary generated.", "success");
+    showStatus(`Tasks ready: ${latestTasks.length}. Click Create Notion DB next.`, "success");
+    showToast("Tasks extracted.", "success");
   } catch (error) {
     showStatus(error.message, "error");
     showToast("Audio processing failed.", "error");
@@ -173,5 +168,4 @@ createNotionDbBtn.addEventListener("click", createNotionDb);
 checkCommitsBtn.addEventListener("click", () => callBackend("/check-commits", "Check GitHub commits"));
 sendStandupBtn.addEventListener("click", () => callBackend("/send-standup", "Send progress report"));
 
-hideSummary();
 setRecordingUI(false);

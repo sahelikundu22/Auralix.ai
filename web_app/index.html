@@ -205,50 +205,6 @@
             transform: translateY(-1px);
         }
 
-        .summary-section {
-            display: none;
-            margin-top: 25px;
-        }
-
-        .summary-section.show {
-            display: block;
-        }
-
-        .summary-section h2 {
-            margin-bottom: 15px;
-            color: #333;
-            font-size: 18px;
-        }
-
-        textarea {
-            width: 100%;
-            min-height: 120px;
-            padding: 15px;
-            border: 2px solid #e1e5e9;
-            border-radius: 10px;
-            font-size: 14px;
-            font-family: inherit;
-            resize: vertical;
-        }
-
-        .post-btn {
-            width: 100%;
-            padding: 15px;
-            background: linear-gradient(135deg, #28a745, #20c997);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-top: 15px;
-            transition: transform 0.2s;
-        }
-
-        .post-btn:hover {
-            transform: translateY(-2px);
-        }
-
         .toast {
             position: fixed;
             top: 20px;
@@ -348,15 +304,11 @@
             </div>
         </div>
 
-        <div id="summarySection" class="summary-section">
-            <h2>AI Summary</h2>
-            <textarea id="summaryEdit" placeholder="Edit summary before posting..."></textarea>
-        </div>
     </div>
 
     <div id="toast" class="toast"></div>
 
-    <script src="config.js"></script>
-    <script src="app.js"></script>
+    <script src="config.js?v=5"></script>
+    <script src="app.js?v=5"></script>
 </body>
 </html> 

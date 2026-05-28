@@ -12,7 +12,6 @@ from faster_whisper import WhisperModel  # type: ignore
 
 BASE_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BASE_DIR.parent
-SUMMARY_PATH = BASE_DIR / "meeting_summary.json"
 LATEST_TRANSCRIPT_PATH = BASE_DIR / "latest_transcript.txt"
 
 load_dotenv(dotenv_path=ROOT_DIR / ".env", override=True)
@@ -63,17 +62,6 @@ def clean_json_text(text: str) -> str:
     return text.replace("```", "").strip()
 
 
-def format_summary(tasks: list[dict]) -> str:
-    if not tasks:
-        return "No tasks were found in the meeting transcript."
-
-    lines = ["Meeting Tasks", ""]
-    for task in tasks:
-        assignee = task.get("assignee") or "Unassigned"
-        lines.append(f"- {assignee}: {task.get('task', '').strip()}")
-    return "\n".join(lines)
-
-
 def generate_summary(transcript: str) -> dict:
     try:
         gemini_model = genai.GenerativeModel("gemini-2.5-flash")
@@ -106,15 +94,12 @@ Rules:
         tasks = structured_data_json.get("action_items", [])
 
         return {
-            "structured_data_json": {"action_items": tasks},
-            "raw_json": raw_json,
-            "formatted_text": format_summary(tasks),
+            "tasks": tasks,
         }
     except Exception as exc:
         return {
             "error": str(exc),
-            "structured_data_json": {"action_items": []},
-            "formatted_text": None,
+            "tasks": [],
         }
 
 
@@ -122,9 +107,7 @@ def process(audio_path: Path) -> dict:
     transcript = transcribe(audio_path)
     result = generate_summary(transcript)
 
-    if not result.get("formatted_text"):
+    if not result.get("tasks"):
         raise RuntimeError(result.get("error") or "Gemini did not return usable task JSON.")
 
-    SUMMARY_PATH.write_text(json.dumps(result, indent=2), encoding="utf-8")
-    print(f"Saved: {SUMMARY_PATH}", flush=True)
     return result

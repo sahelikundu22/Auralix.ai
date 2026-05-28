@@ -17,6 +17,26 @@ app = Flask(__name__)
 CORS(app)
 
 
+def validate_tasks(tasks: list[dict]) -> list[dict]:
+    if not tasks:
+        raise RuntimeError("No extracted tasks found. Upload or record audio before creating the Notion DB.")
+
+    cleaned = []
+    print("\n========== EXTRACTED TASKS START ==========", flush=True)
+    for task in tasks:
+        task_name = str(task.get("task", "")).strip()
+        assignee = str(task.get("assignee") or "Unassigned").strip()
+        if task_name:
+            cleaned.append({"task": task_name, "assignee": assignee})
+            print(f"- {assignee}: {task_name}", flush=True)
+    print("=========== EXTRACTED TASKS END ===========\n", flush=True)
+
+    if not cleaned:
+        raise RuntimeError("No valid task names found.")
+    return cleaned
+
+
+
 @app.get("/")
 def home():
     return jsonify(
@@ -62,8 +82,9 @@ def create_notion_db():
     try:
         data = request.get_json(silent=True) or {}
         meeting_title = data.get("meetingTitle") or "Meeting"
-        tasks = import_meeting_tasks(fresh_database=True, database_title=f"{meeting_title} Tasks")
-        return jsonify({"status": "success", "tasks": tasks})
+        tasks = validate_tasks(data.get("tasks") or [])
+        result = import_meeting_tasks(fresh_database=True, database_title=f"{meeting_title} Tasks", tasks=tasks)
+        return jsonify({"status": "success", "tasks": result})
     except Exception as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500
 

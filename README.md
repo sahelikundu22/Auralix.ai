@@ -4,23 +4,29 @@
 
 [Watch Demo Video](https://youtu.be/b38ItkhMtxQ)
 
-Auralix.ai is an AI-powered meeting assistant that records or uploads meeting audio, transcribes it with Whisper, extracts tasks with Gemini, creates a Notion task database, tracks GitHub commits, and sends Slack progress reports.
+Auralix.ai is an AI-powered meeting assistant that records or uploads meeting audio, transcribes it with Whisper, extracts team tasks with Gemini, creates a Notion task database, tracks GitHub commits, and sends clean Slack progress reports.
+
+This version is a cleaner independent rebuild of the original Hack4Bengal 4.0 project.
+
+---
 
 ## Features
 
-- Record or upload meeting audio from the web app or Chrome extension.
-- Transcribe audio with Faster Whisper.
-- Extract only task name and assignee with Gemini.
-- Create a fresh Notion database from the latest `meeting_summary.json`.
-- Match GitHub commits to assigned tasks and mark only the matching task as `Done`.
-- Send one Slack progress report using current Notion task statuses.
+- **Meeting Audio Capture**: Record audio from the web app or Chrome extension, or upload an audio file.
+- **AI Processing**: Faster Whisper transcription and Gemini task extraction.
+- **Notion Sync**: Create a fresh Notion task database from Gemini-extracted tasks.
+- **GitHub Monitoring**: Check commits from the last 24 hours, match them to assigned tasks, and update only the matching task status.
+- **Slack Reporting**: Send one progress report with done and not-done tasks.
+- **Simple Controls**: Upload audio, create Notion DB, check GitHub commits, and send Slack report.
 
-## Workflow
+---
+
+## Architecture
 
 ```text
 +-----------------------------------------------------------------------------+
 |                               INPUT SOURCES                                  |
-|        Web App  |  Chrome Extension  |  Microphone  |  Audio Upload          |
+|        Chrome Extension  |  Web App  |  Microphone  |  Audio Upload          |
 +-----------------------------------------------------------------------------+
                                       |
                                       v
@@ -32,43 +38,45 @@ Auralix.ai is an AI-powered meeting assistant that records or uploads meeting au
                                       v
 +-----------------------------------------------------------------------------+
 |                              TASK SOURCE                                     |
-|        Latest task summary is saved in backend/meeting_summary.json          |
+|        Gemini-extracted tasks kept in frontend memory until DB creation      |
 +-----------------------------------------------------------------------------+
                                       |
                                       v
 +-----------------------------------------------------------------------------+
-|                            NOTION WORKFLOW                                   |
-|        Create Notion DB button  ->  new task database under parent page      |
+|                         TASK MANAGEMENT (NOTION)                             |
+|        Create Notion DB  ->  Task Creation  |  Assignment  |  Status         |
 +-----------------------------------------------------------------------------+
                                       |
                                       v
 +-----------------------------------------------------------------------------+
-|                            GITHUB TRACKING                                   |
-|        Commit author + message matching  ->  matching task becomes Done      |
+|                            GITHUB MONITORING                                 |
+|        Commit Tracking  ->  Task Matching  ->  Auto Status Updates           |
 +-----------------------------------------------------------------------------+
                                       |
                                       v
 +-----------------------------------------------------------------------------+
-|                            SLACK REPORTING                                   |
-|        Done tasks + Not Done tasks + assignee progress summary               |
+|                           PROGRESS REPORTING                                 |
+|        Current Notion Status  ->  Team Progress Summary  ->  Slack           |
 +-----------------------------------------------------------------------------+
 ```
 
-## Project Structure
+---
 
-```text
-meeting/
-+-- backend/
-|   +-- app.py                # Whisper + Gemini task extraction
-|   +-- server.py             # Flask API
-|   +-- sync_pipeline.py      # Notion, GitHub, Slack workflow
-|   +-- meeting_summary.json  # Latest generated task summary
-|   +-- user_mapping.json     # Local-only mapping fallback, ignored by git
-+-- extension/                # Chrome extension
-+-- web_app/                  # Static web app
-+-- workflow_docs/            # Extra workflow explanation docs
-+-- requirements.txt
+## Quick Start
+
+### 1. Setup
+
+```bash
+git clone <repo-url>
+cd meeting
+pip install -r requirements.txt
 ```
+
+### 2. Configure Notion
+
+Create one Notion parent page and connect it to your Notion integration. Put that page ID in `PARENT_PAGE_ID`.
+
+### 3. Configure Environment
 
 Create a `.env` file in the project root:
 
@@ -90,7 +98,7 @@ PARENT_PAGE_ID=your_notion_parent_page_id
 DATABASE_ID=optional_existing_database_id
 ```
 
-Create one Notion parent page, connect it to your Notion integration, and put that page ID in `PARENT_PAGE_ID`.
+### 4. Configure User Mapping
 
 User mapping connects GitHub commit authors to Notion assignees and Slack display names. Add one entry for every team member whose commits should update tasks.
 
@@ -125,23 +133,26 @@ You can also use this `.env` variable instead of the file:
 USER_MAPPING_JSON={"member_one":{"github_username":"member_one_github","notion_name":"Member One","slack_display_name":"Member One"},"member_two":{"github_username":"member_two_github","notion_name":"Member Two","slack_display_name":"Member Two"}}
 ```
 
-## Run Locally
+### 5. Run Backend
 
-Install dependencies:
-
-```powershell
-pip install -r requirements.txt
+```bash
+python backend/server.py
 ```
 
-Start backend:
+### 6. Use Chrome Extension
 
-```powershell
-python backend\server.py
-```
+1. Open `chrome://extensions/`.
+2. Enable Developer Mode.
+3. Click `Load unpacked`.
+4. Select the `extension` folder.
+5. Keep the backend running on `http://127.0.0.1:5000`.
+6. Allow microphone permissions if prompted.
 
-Start web app in another terminal:
+### Alternative: Use Web App
 
-```powershell
+If you do not want to use the extension, start the web app instead:
+
+```bash
 cd web_app
 python -m http.server 8001
 ```
@@ -152,19 +163,48 @@ Open:
 http://127.0.0.1:8001/index.html
 ```
 
-Use order:
+---
 
-1. Upload or record audio.
-2. Click `Create Notion DB`.
-3. Click `Check GitHub Commits`.
-4. Click `Send Progress Report`.
+## Workflow
+
+1. **Record or Upload** -> Send meeting audio from the web app or extension.
+2. **Process** -> Whisper transcribes audio and Gemini extracts task/assignee data.
+3. **Create** -> Click `Create Notion DB`; the frontend sends the extracted tasks to the backend.
+4. **Track** -> Click `Check GitHub Commits` to check the last 24 hours of commits and update matching task statuses.
+5. **Report** -> Click `Send Progress Report` to send the Slack update.
+
+---
+
+## Structure
+
+```text
+meeting/
++-- backend/          # Flask backend, Whisper/Gemini, Notion/GitHub/Slack logic
++-- extension/        # Chrome extension
++-- web_app/          # Web interface
++-- workflow_docs/    # Extra workflow explanation docs
++-- requirements.txt  # Python dependencies
+```
+
+---
+
+## Integrations
+
+- **Notion**: Task database creation and status tracking.
+- **Slack**: Progress report delivery through webhook.
+- **GitHub**: Commit monitoring and task matching.
+- **AI**: Faster Whisper transcription and Gemini task extraction.
+
+---
 
 ## Notes
 
-- `meeting_summary.json` is the source for Notion task creation.
+- Gemini-extracted tasks are sent directly from the frontend to Notion creation.
+- GitHub tracking checks commits from the last 24 hours and skips tasks that are already `Done`.
 - `DATABASE_ID` is updated when a new Notion database is created.
-- For deployment, the backend uses `tiny.en` by default to reduce memory usage. You can change it to `small.en` in the environment if you want better transcription quality.
-- Extra workflow explanations are in `workflow_docs/end_to_end_workflow.md` and `workflow_docs/file_responsibility_map.md`.
+- For deployment, the backend uses `tiny.en` by default to reduce memory usage. You can change it to `small.en` in the environment for better transcription quality.
+
+---
 
 ## Acknowledgement
 

@@ -1,7 +1,7 @@
 """Notion, GitHub, and Slack sync pipeline.
 
 Current behavior:
-- Create Notion DB reads backend/meeting_summary.json.
+- Create Notion DB can use edited frontend tasks directly.
 - The new database ID replaces DATABASE_ID in .env.
 - GitHub tracking and Slack reports use the active DATABASE_ID.
 """
@@ -9,7 +9,7 @@ Current behavior:
 import json
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -20,9 +20,7 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BASE_DIR.parent
 ENV_PATH = ROOT_DIR / ".env"
-SUMMARY_PATH = BASE_DIR / "meeting_summary.json"
 USER_MAPPING_PATH = BASE_DIR / "user_mapping.json"
-STATE_PATH = BASE_DIR / ".sync_state.json"
 
 load_dotenv(ENV_PATH, override=True)
 
@@ -108,12 +106,6 @@ def load_json(path: Path, default: Any) -> Any:
         return json.load(f)
 
 
-def save_json(path: Path, data: Any) -> None:
-    """Save JSON to disk."""
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-
 def write_database_id(database_id: str) -> None:
     """Replace DATABASE_ID in .env with the latest Notion database ID."""
     lines = ENV_PATH.read_text(encoding="utf-8").splitlines() if ENV_PATH.exists() else []
@@ -187,12 +179,8 @@ def user_for_notion(name: str | None) -> dict[str, str] | None:
     return None
 
 
-def extract_tasks_from_summary(summary_path: Path = SUMMARY_PATH) -> list[dict[str, Any]]:
-    """Read meeting_summary.json action items as Notion tasks."""
-    data = load_json(summary_path, {})
-    structured = data.get("structured_data_json", data)
-    action_items = structured.get("action_items", []) if isinstance(structured, dict) else []
-
+def prepare_tasks(action_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert frontend/Gemini task items to Notion task rows."""
     tasks = []
     for item in action_items:
         task_name = str(item.get("task", "")).strip()
@@ -202,18 +190,10 @@ def extract_tasks_from_summary(summary_path: Path = SUMMARY_PATH) -> list[dict[s
             {
                 "task": task_name,
                 "assignee": normalize_name(item.get("assignee")),
-                "status": TASK_STATUS_TODO,
+                "status": item.get("status") or TASK_STATUS_TODO,
             }
         )
-
     return tasks
-
-
-def build_task_input(summary_path: Path = SUMMARY_PATH) -> dict[str, Any]:
-    """Preview task payload extracted from the summary."""
-    return {
-        "tasks": extract_tasks_from_summary(summary_path),
-    }
 
 
 def create_notion_database(title: str | None = None) -> str:
@@ -239,7 +219,6 @@ def create_notion_database(title: str | None = None) -> str:
     raise_api_error(response, "Notion", "database creation")
     database_id = response.json()["id"]
     write_database_id(database_id)
-    reset_state()
     return database_id
 
 
@@ -294,13 +273,13 @@ def add_task_to_notion(database_id: str, task: dict[str, Any]) -> str:
 
 
 def import_meeting_tasks(
-    summary_path: Path = SUMMARY_PATH,
     *,
     fresh_database: bool = True,
     database_title: str | None = None,
+    tasks: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    """Create a fresh Notion database and insert tasks from meeting_summary.json."""
-    tasks = build_task_input(summary_path).get("tasks", [])
+    """Create a fresh Notion database and insert meeting tasks."""
+    tasks = prepare_tasks(tasks)
     target_database_id = create_notion_database(database_title) if fresh_database else database_id()
 
     for task in tasks:
@@ -309,33 +288,17 @@ def import_meeting_tasks(
     return {"created": len(tasks), "total": len(tasks), "database_id": target_database_id}
 
 
-def fetch_recent_commits(limit: int = 30) -> list[dict[str, Any]]:
-    """Fetch recent commits from configured GitHub repo."""
+def fetch_recent_commits(hours: int = 24, limit: int = 100) -> list[dict[str, Any]]:
+    """Fetch commits from the last N hours from the configured GitHub repo."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
     response = requests.get(
         f"https://api.github.com/repos/{required_env('REPO_OWNER')}/{required_env('REPO_NAME')}/commits",
         headers=github_headers(),
-        params={"per_page": limit},
+        params={"per_page": limit, "since": since},
         timeout=30,
     )
     raise_api_error(response, "GitHub", "commit fetch")
     return response.json()
-
-
-def load_state() -> dict[str, Any]:
-    """Load last processed commit state."""
-    return load_json(STATE_PATH, {})
-
-
-def save_state(state: dict[str, Any]) -> None:
-    """Save last processed commit state."""
-    state["updated_at"] = datetime.now(timezone.utc).isoformat()
-    save_json(STATE_PATH, state)
-
-
-def reset_state() -> None:
-    """Reset commit tracking for each fresh meeting database."""
-    if STATE_PATH.exists():
-        STATE_PATH.unlink()
 
 
 def print_commit_log(label: str, commits: list[dict[str, Any]]) -> None:
@@ -350,22 +313,6 @@ def print_commit_log(label: str, commits: list[dict[str, Any]]) -> None:
         message = commit.get("commit", {}).get("message", "").splitlines()[0]
         print(f"{sha} | {author} | {date} | {message}", flush=True)
     print("========================================\n", flush=True)
-
-
-def new_commits(commits: list[dict[str, Any]], state: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return commits newer than last_seen_sha."""
-    last_seen = state.get("last_seen_sha")
-    if not commits:
-        return []
-    if not last_seen:
-        return commits[:1]
-
-    unseen = []
-    for commit in commits:
-        if commit.get("sha") == last_seen:
-            break
-        unseen.append(commit)
-    return list(reversed(unseen))
 
 
 def mark_task_done(page_id: str) -> None:
@@ -389,7 +336,12 @@ def task_match_score(commit_message: str, task_name: str) -> int:
     task_words = keywords(task_name)
     if not commit_words or not task_words:
         return 0
-    return len(commit_words & task_words)
+    overlap = commit_words & task_words
+    if not overlap:
+        return 0
+    if len(task_words) == 1:
+        return 1
+    return len(overlap) if len(overlap) >= 2 else 0
 
 
 def best_task_match(commit_message: str, pages: list[dict[str, Any]], assignee: str) -> dict[str, Any] | None:
@@ -524,31 +476,23 @@ def send_to_slack(message: str) -> None:
     response.raise_for_status()
 
 
-def sync_once(send_slack: bool = True, force_slack: bool = False, import_tasks: bool = False) -> dict[str, Any]:
+def sync_once(send_slack: bool = True, force_slack: bool = False) -> dict[str, Any]:
     """Run one sync pass."""
-    import_result = import_meeting_tasks() if import_tasks else {"created": 0, "total": 0}
-    state = load_state()
+    import_result = {"created": 0, "total": 0}
     commits = fetch_recent_commits()
-    print_commit_log("FETCHED GITHUB COMMITS", commits)
-    unseen = new_commits(commits, state)
-    if not unseen and commits:
-        print("No unseen commits from state; rechecking latest commit for recovery.", flush=True)
-        unseen = commits[:1]
-    print_commit_log("TRACKED NEW COMMITS", unseen)
+    commits = list(reversed(commits))
+    print_commit_log("GITHUB COMMITS FROM LAST 24 HOURS", commits)
 
-    updated = update_tasks_from_commits(unseen) if unseen else []
-    if commits:
-        state["last_seen_sha"] = commits[0]["sha"]
-        save_state(state)
+    updated = update_tasks_from_commits(commits) if commits else []
 
-    report = format_progress_report(unseen, updated)
-    should_send_slack = send_slack and (force_slack or bool(unseen) or bool(updated))
+    report = format_progress_report(commits, updated)
+    should_send_slack = send_slack and (force_slack or bool(commits) or bool(updated))
     if should_send_slack:
         send_to_slack(report)
 
     return {
         "notion": import_result,
-        "new_commits": len(unseen),
+        "checked_commits": len(commits),
         "updated_tasks": updated,
         "slack_sent": should_send_slack,
         "report": report,
