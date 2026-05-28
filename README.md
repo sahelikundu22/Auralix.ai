@@ -18,62 +18,112 @@ Auralix.ai is an AI-powered meeting assistant that records or uploads meeting au
 ## Workflow
 
 ```text
-Audio Upload / Recording
-        |
-        v
-Whisper transcript
-        |
-        v
-Gemini task JSON: task + assignee
-        |
-        v
-meeting_summary.json
-        |
-        v
-Create Notion DB button
-        |
-        v
-GitHub commit tracking -> matching task marked Done
-        |
-        v
-Slack progress report
++-----------------------------------------------------------------------------+
+|                               INPUT SOURCES                                  |
+|        Web App  |  Chrome Extension  |  Microphone  |  Audio Upload          |
++-----------------------------------------------------------------------------+
+                                      |
+                                      v
++-----------------------------------------------------------------------------+
+|                            AI PROCESSING                                     |
+|        Faster Whisper transcript  ->  Gemini task JSON: task + assignee      |
++-----------------------------------------------------------------------------+
+                                      |
+                                      v
++-----------------------------------------------------------------------------+
+|                              TASK SOURCE                                     |
+|        Latest task summary is saved in backend/meeting_summary.json          |
++-----------------------------------------------------------------------------+
+                                      |
+                                      v
++-----------------------------------------------------------------------------+
+|                            NOTION WORKFLOW                                   |
+|        Create Notion DB button  ->  new task database under parent page      |
++-----------------------------------------------------------------------------+
+                                      |
+                                      v
++-----------------------------------------------------------------------------+
+|                            GITHUB TRACKING                                   |
+|        Commit author + message matching  ->  matching task becomes Done      |
++-----------------------------------------------------------------------------+
+                                      |
+                                      v
++-----------------------------------------------------------------------------+
+|                            SLACK REPORTING                                   |
+|        Done tasks + Not Done tasks + assignee progress summary               |
++-----------------------------------------------------------------------------+
 ```
 
 ## Project Structure
 
 ```text
 meeting/
-├── backend/
-│   ├── app.py                # Whisper + Gemini task extraction
-│   ├── server.py             # Flask API
-│   ├── sync_pipeline.py      # Notion, GitHub, Slack workflow
-│   ├── meeting_summary.json  # Latest generated task summary
-│   └── user_mapping.json     # Local-only mapping fallback, ignored by git
-├── extension/                # Chrome extension
-├── web_app/                  # Static web app
-├── workflow_docs/            # Extra workflow explanation docs
-├── requirements.txt
-└── render.yaml
++-- backend/
+|   +-- app.py                # Whisper + Gemini task extraction
+|   +-- server.py             # Flask API
+|   +-- sync_pipeline.py      # Notion, GitHub, Slack workflow
+|   +-- meeting_summary.json  # Latest generated task summary
+|   +-- user_mapping.json     # Local-only mapping fallback, ignored by git
++-- extension/                # Chrome extension
++-- web_app/                  # Static web app
++-- workflow_docs/            # Extra workflow explanation docs
++-- requirements.txt
 ```
 
-## Environment Variables
-
-Create `.env` locally, and add the same values in Render for deployment:
+Create a `.env` file in the project root:
 
 ```env
+# Google
 GEMINI_API_KEY=your_gemini_api_key
+
+# GitHub Integration
+TOKEN_GITHUB=your_github_personal_access_token
+REPO_OWNER=your_github_username_or_org
+REPO_NAME=your_working_repository_name
+
+# Slack Configuration
+SLACK_WEBHOOK_URL=your_slack_webhook_url
+
+# Notion Configuration
 NOTION_TOKEN=your_notion_integration_token
 PARENT_PAGE_ID=your_notion_parent_page_id
 DATABASE_ID=optional_existing_database_id
-USER_MAPPING_JSON={"saheli":{"github_username":"your_github","notion_name":"Saheli","slack_display_name":"Saheli"}}
-TOKEN_GITHUB=your_github_personal_access_token
-REPO_OWNER=your_github_username_or_org
-REPO_NAME=your_repository_name
-SLACK_WEBHOOK_URL=your_slack_webhook_url
-WHISPER_MODEL=tiny.en
 ```
 
-`USER_MAPPING_JSON` is private team mapping data. Locally, you can use `backend/user_mapping.json` instead, but that file is ignored by git.
+Create one Notion parent page, connect it to your Notion integration, and put that page ID in `PARENT_PAGE_ID`.
+
+User mapping connects GitHub commit authors to Notion assignees and Slack display names. Add one entry for every team member whose commits should update tasks.
+
+For local use, create:
+
+```text
+backend/user_mapping.json
+```
+
+Example:
+
+```json
+{
+  "member_one": {
+    "github_username": "member_one_github",
+    "notion_name": "Member One",
+    "slack_display_name": "Member One"
+  },
+  "member_two": {
+    "github_username": "member_two_github",
+    "notion_name": "Member Two",
+    "slack_display_name": "Member Two"
+  }
+}
+```
+
+`backend/user_mapping.json` is ignored by git so private member mapping does not get pushed.
+
+You can also use this `.env` variable instead of the file:
+
+```env
+USER_MAPPING_JSON={"member_one":{"github_username":"member_one_github","notion_name":"Member One","slack_display_name":"Member One"},"member_two":{"github_username":"member_two_github","notion_name":"Member Two","slack_display_name":"Member Two"}}
+```
 
 ## Run Locally
 
@@ -109,70 +159,11 @@ Use order:
 3. Click `Check GitHub Commits`.
 4. Click `Send Progress Report`.
 
-## Deploy
-
-Deploy the backend and frontend separately.
-
-### Backend On Render
-
-Choose `Web Service`.
-
-```text
-Root Directory:
-leave empty
-
-Build Command:
-pip install -r requirements.txt
-
-Start Command:
-gunicorn --chdir backend server:app
-```
-
-Add all environment variables from the section above in Render.
-
-Render Free has 512 MB RAM, so use:
-
-```env
-WHISPER_MODEL=tiny.en
-```
-
-If Whisper still causes memory issues, use a larger Render instance or move transcription to an external API.
-
-### Web App On Vercel Or Netlify
-
-Set the static site directory to:
-
-```text
-web_app
-```
-
-Before deploying, update `web_app/config.js`:
-
-```js
-window.AURALIX_API_URL = "https://your-render-backend-url.onrender.com";
-```
-
-### Chrome Extension
-
-Update `extension/popup.js`:
-
-```js
-const API_URL = "https://your-render-backend-url.onrender.com";
-```
-
-Update `extension/manifest.json`:
-
-```json
-"host_permissions": ["https://your-render-backend-url.onrender.com/*"]
-```
-
-Reload the unpacked extension from `chrome://extensions/`.
-
 ## Notes
 
 - `meeting_summary.json` is the source for Notion task creation.
 - `DATABASE_ID` is updated when a new Notion database is created.
-- On hosted platforms, runtime file changes can reset after redeploy. If needed, copy the latest Notion database ID into the hosted `DATABASE_ID` environment variable.
+- For deployment, the backend uses `tiny.en` by default to reduce memory usage. You can change it to `small.en` in the environment if you want better transcription quality.
 - Extra workflow explanations are in `workflow_docs/end_to_end_workflow.md` and `workflow_docs/file_responsibility_map.md`.
 
 ## Acknowledgement
