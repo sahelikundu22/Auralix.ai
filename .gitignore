@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+.venv/
+
+# IDE/Editor specific
+.idea/
+.vscode/
+*.swp
+
+# Dependencies
+*.egg-info/
+dist/
+build/
+
+# Logs
+*.log
+
+# Secrets
+.env
+*.env
+backend/user_mapping.json
+
+# Temporary files
+backend/temp_audio.wav
+backend/.sync_state.json
+backend/latest_transcript.txt
+backend/__pycache__/

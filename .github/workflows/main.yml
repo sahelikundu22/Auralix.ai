@@ -1,0 +1,77 @@
+name: Developer Workflow Reference
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reference:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Current project workflow
+        run: |
+          cat <<'YAML'
+          developer_workflow:
+            backend_folder: backend
+            frontends:
+              web_app: web_app
+              chrome_extension: extension
+
+            upload_audio:
+              route: POST /transcribe
+              code_path:
+                - backend/server.py:transcribe_audio
+                - backend/app.py:process
+              steps:
+                - save uploaded audio to a temporary file
+                - transcribe audio with Faster Whisper
+                - print transcript in the backend terminal
+                - save transcript to backend/latest_transcript.txt for debugging
+                - send transcript to Gemini
+                - save backend/meeting_summary.json
+                - return summary to the UI
+
+            create_notion_database:
+              route: POST /create-notion-db
+              code_path:
+                - backend/server.py:create_notion_db
+                - backend/sync_pipeline.py:import_meeting_tasks
+              steps:
+                - read backend/meeting_summary.json
+                - create a new Notion database under PARENT_PAGE_ID
+                - write the new DATABASE_ID back to .env
+                - insert Gemini action_items as Notion task rows
+
+            check_github_commits:
+              route: GET /check-commits
+              code_path:
+                - backend/server.py:check_commits
+                - backend/sync_pipeline.py:sync_once
+              steps:
+                - read the active DATABASE_ID from .env
+                - fetch recent commits from REPO_OWNER/REPO_NAME
+                - print fetched and tracked commits in the backend terminal
+                - match commit authors using backend/user_mapping.json
+                - mark every task assigned to the matched member as Done
+                - save the latest processed commit SHA in backend/.sync_state.json
+
+            send_progress_report:
+              route: GET /send-standup
+              code_path:
+                - backend/server.py:send_standup
+                - backend/sync_pipeline.py:format_progress_report
+              steps:
+                - read the active Notion database
+                - group tasks by assignee
+                - include done tasks, not-done tasks, and recent commit messages
+                - send one Slack message through SLACK_WEBHOOK_URL
+
+            old_database_rule:
+              user_action: manually edit DATABASE_ID in .env
+              restart_needed: true
+              reason: GitHub tracking and Slack reporting always use the current DATABASE_ID
+
+            generated_files:
+              - backend/latest_transcript.txt
+              - backend/meeting_summary.json
+              - backend/.sync_state.json
+          YAML

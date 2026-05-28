@@ -1,0 +1,24 @@
+{
+  "structured_data_json": {
+    "action_items": [
+      {
+        "task": "create the wireframes for the homepage, focusing on the hero section, navigation bar and footer",
+        "assignee": "Shreya"
+      },
+      {
+        "task": "set up the base project with React and Tailwind CSS, including folder structure and pushing to GitHub",
+        "assignee": "Deepnanda"
+      },
+      {
+        "task": "design the logo, select the color palette and choose a font that aligns with clean, modern feel",
+        "assignee": "Shawheli"
+      },
+      {
+        "task": "take care of the content side, starting with the homepage text, about section and features",
+        "assignee": null
+      }
+    ]
+  },
+  "raw_json": "{\"action_items\": [{\"task\": \"create the wireframes for the homepage, focusing on the hero section, navigation bar and footer\", \"assignee\": \"Shreya\"}, {\"task\": \"set up the base project with React and Tailwind CSS, including folder structure and pushing to GitHub\", \"assignee\": \"Deepnanda\"}, {\"task\": \"design the logo, select the color palette and choose a font that aligns with clean, modern feel\", \"assignee\": \"Shawheli\"}, {\"task\": \"take care of the content side, starting with the homepage text, about section and features\", \"assignee\": null}]}",
+  "formatted_text": "Meeting Tasks\n\n- Shreya: create the wireframes for the homepage, focusing on the hero section, navigation bar and footer\n- Deepnanda: set up the base project with React and Tailwind CSS, including folder structure and pushing to GitHub\n- Shawheli: design the logo, select the color palette and choose a font that aligns with clean, modern feel\n- Unassigned: take care of the content side, starting with the homepage text, about section and features"
+}

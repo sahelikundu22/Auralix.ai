@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "SyncMaster - Workflow Automation System",
+  "version": "1.0",
+  "description": "Transform your meetings with AI-powered transcription, summarization, and automation. Record, analyze, and share meeting insights effortlessly.",
+  "permissions": [
+    "activeTab",
+    "tabCapture",
+    "storage",
+    "microphone"
+  ],
+  "host_permissions": ["http://127.0.0.1:5000/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  }
+}
